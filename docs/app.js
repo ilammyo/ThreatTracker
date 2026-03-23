@@ -15,6 +15,18 @@ let generatedAt = "";
 let currentSort = { key: "published_date", desc: true };
 let quickFilterActive = null; // "critical" | "exploited" | null
 
+function parseDateValue(value) {
+    if (!value) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [year, month, day] = value.split("-").map(Number);
+        return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+}
+
 function safeUrl(value) {
     if (!value) return "";
     try {
@@ -38,15 +50,14 @@ async function loadJson(path) {
 
 function formatTimestamp(value) {
     if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
+    const date = parseDateValue(value);
+    if (!date) return value;
     return date.toLocaleString();
 }
 
-function relativeTime(isoString) {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return "";
+function relativeTime(value) {
+    const date = parseDateValue(value);
+    if (!date) return "";
     const diffMs = Date.now() - date.getTime();
     const diffH = Math.floor(diffMs / 3600000);
     if (diffH < 1) return "just now";
@@ -65,7 +76,8 @@ function isoCutoff(days) {
 function isNewAlert(alert) {
     if (!alert.published_date) return false;
     const cutoff = new Date(Date.now() - NEW_ALERT_HOURS * 3600000);
-    const published = new Date(alert.published_date + "T00:00:00");
+    const published = parseDateValue(alert.published_date);
+    if (!published) return false;
     return published >= cutoff;
 }
 
@@ -146,8 +158,8 @@ function renderStaleness() {
         banner.classList.add("hidden");
         return;
     }
-    const genDate = new Date(generatedAt);
-    if (Number.isNaN(genDate.getTime())) {
+    const genDate = parseDateValue(generatedAt);
+    if (!genDate) {
         banner.classList.add("hidden");
         return;
     }
