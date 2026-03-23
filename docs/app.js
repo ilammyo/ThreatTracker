@@ -10,6 +10,19 @@ let allAlerts = [];
 let allStatus = [];
 let currentSort = { key: "published_date", desc: true };
 
+function safeUrl(value) {
+    if (!value) return "";
+    try {
+        const parsed = new URL(value, window.location.origin);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            return parsed.href;
+        }
+    } catch (_error) {
+        return "";
+    }
+    return "";
+}
+
 async function loadJson(path) {
     const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) {
@@ -38,7 +51,13 @@ function renderSourceFilters(sources) {
     for (const source of sources) {
         const label = document.createElement("label");
         label.className = "checkbox";
-        label.innerHTML = `<input class="source-filter" type="checkbox" value="${source}" checked> ${sourceLabels[source] || source}`;
+        const input = document.createElement("input");
+        input.className = "source-filter";
+        input.type = "checkbox";
+        input.value = source;
+        input.checked = true;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(` ${sourceLabels[source] || source}`));
         container.appendChild(label);
     }
     container.querySelectorAll(".source-filter").forEach((node) => {
@@ -117,22 +136,45 @@ function renderAlerts(alerts) {
         row.dataset.severity = alert.severity || "UNKNOWN";
         row.dataset.source = alert.source;
 
-        row.querySelector(".severity-cell").innerHTML =
-            `<span class="pill ${String(alert.severity || "UNKNOWN").toLowerCase()}">${alert.severity || "UNKNOWN"}</span>`;
-        row.querySelector(".source-cell").innerHTML =
-            `<span class="source-tag">${sourceLabels[alert.source] || alert.source}</span>`;
+        const severityCell = row.querySelector(".severity-cell");
+        const severityPill = document.createElement("span");
+        severityPill.className = `pill ${String(alert.severity || "UNKNOWN").toLowerCase()}`;
+        severityPill.textContent = alert.severity || "UNKNOWN";
+        severityCell.appendChild(severityPill);
 
-        row.querySelector(".cve-cell").innerHTML = alert.cve_id
-            ? `<a href="https://nvd.nist.gov/vuln/detail/${alert.cve_id}" target="_blank" rel="noreferrer">${alert.cve_id}</a>`
-            : "";
+        const sourceCell = row.querySelector(".source-cell");
+        const sourceTag = document.createElement("span");
+        sourceTag.className = "source-tag";
+        sourceTag.textContent = sourceLabels[alert.source] || alert.source;
+        sourceCell.appendChild(sourceTag);
+
+        const cveCell = row.querySelector(".cve-cell");
+        if (alert.cve_id) {
+            const cveLink = document.createElement("a");
+            cveLink.href = `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(alert.cve_id)}`;
+            cveLink.target = "_blank";
+            cveLink.rel = "noreferrer";
+            cveLink.textContent = alert.cve_id;
+            cveCell.appendChild(cveLink);
+        }
 
         const titleCell = row.querySelector(".title-cell");
         const titleText = alert.title || "";
-        const description = alert.description ? `<small>${alert.description}</small>` : "";
-        if (alert.url) {
-            titleCell.innerHTML = `<a href="${alert.url}" target="_blank" rel="noreferrer">${titleText}</a>${description}`;
+        const href = safeUrl(alert.url);
+        if (href) {
+            const link = document.createElement("a");
+            link.href = href;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.textContent = titleText;
+            titleCell.appendChild(link);
         } else {
-            titleCell.innerHTML = `${titleText}${description}`;
+            titleCell.textContent = titleText;
+        }
+        if (alert.description) {
+            const description = document.createElement("small");
+            description.textContent = alert.description;
+            titleCell.appendChild(description);
         }
 
         row.querySelector(".vendor-cell").textContent = alert.vendor || "";
@@ -198,7 +240,13 @@ async function init() {
         applyAndRender();
     } catch (error) {
         const tbody = document.getElementById("alerts-body");
-        tbody.innerHTML = `<tr><td colspan="7">Failed to load dashboard data: ${error.message}</td></tr>`;
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 7;
+        cell.textContent = `Failed to load dashboard data: ${error.message}`;
+        row.appendChild(cell);
+        tbody.innerHTML = "";
+        tbody.appendChild(row);
     }
 }
 

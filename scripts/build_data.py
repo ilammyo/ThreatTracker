@@ -195,7 +195,7 @@ def fetch_nvd() -> FetchResult:
     all_alerts: list[dict[str, Any]] = []
     start_index = 0
     results_per_page = 200
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=NVD_FETCH_DAYS)
     pub_start = start.strftime("%Y-%m-%dT00:00:00.000")
     pub_end = end.strftime("%Y-%m-%dT23:59:59.999")
@@ -254,7 +254,7 @@ def fetch_nvd() -> FetchResult:
 
 def fetch_msrc() -> FetchResult:
     all_alerts: list[dict[str, Any]] = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     months = [now, now.replace(day=1) - timedelta(days=1)]
 
     for dt in months:
@@ -404,7 +404,7 @@ def build() -> None:
         reverse=True,
     )
 
-    cutoff = (datetime.utcnow() - timedelta(days=DEFAULT_DAYS)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=DEFAULT_DAYS)).strftime("%Y-%m-%d")
     recent_alerts = [alert for alert in alerts if alert["published_date"] >= cutoff]
 
     summary = {
