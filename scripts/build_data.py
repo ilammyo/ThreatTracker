@@ -389,10 +389,33 @@ def build() -> None:
                 }
             )
 
+    # Build a lookup of the best known severity/score for each CVE from NVD and MSRC
+    cve_severity: dict[str, tuple[str, float | None]] = {}
+    for alert in alerts:
+        cve = alert.get("cve_id")
+        if not cve or alert["source"] == "kev":
+            continue
+        sev = alert.get("severity", "UNKNOWN")
+        score = alert.get("cvss_score")
+        existing = cve_severity.get(cve)
+        if existing is None or (sev != "UNKNOWN" and existing[0] == "UNKNOWN"):
+            cve_severity[cve] = (sev, score)
+        elif score is not None and (existing[1] is None or score > existing[1]):
+            cve_severity[cve] = (sev, score)
+
+    # Cross-reference: mark exploited flag and inherit severity for KEV entries
     kev_cves = {alert["cve_id"] for alert in alerts if alert["source"] == "kev" and alert.get("cve_id")}
     for alert in alerts:
-        if alert.get("cve_id") in kev_cves and alert["source"] != "kev":
+        cve = alert.get("cve_id")
+        if cve in kev_cves and alert["source"] != "kev":
             alert["actively_exploited"] = 1
+        # Inherit severity from NVD/MSRC for KEV and any other UNKNOWN-severity alerts
+        if cve and alert.get("severity", "UNKNOWN") == "UNKNOWN" and cve in cve_severity:
+            best_sev, best_score = cve_severity[cve]
+            if best_sev != "UNKNOWN":
+                alert["severity"] = best_sev
+                if best_score is not None:
+                    alert["cvss_score"] = best_score
 
     alerts = [alert for alert in alerts if alert.get("published_date")]
     alerts.sort(
