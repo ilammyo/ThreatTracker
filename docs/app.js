@@ -6,9 +6,14 @@ const sourceLabels = {
     nvd: "NIST National Vulnerability Database",
 };
 
+const STALENESS_HOURS = 8;
+const NEW_ALERT_HOURS = 48;
+
 let allAlerts = [];
 let allStatus = [];
+let generatedAt = "";
 let currentSort = { key: "published_date", desc: true };
+let quickFilterActive = null; // "critical" | "exploited" | null
 
 function safeUrl(value) {
     if (!value) return "";
@@ -38,11 +43,30 @@ function formatTimestamp(value) {
     return date.toLocaleString();
 }
 
+function relativeTime(isoString) {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "";
+    const diffMs = Date.now() - date.getTime();
+    const diffH = Math.floor(diffMs / 3600000);
+    if (diffH < 1) return "just now";
+    if (diffH < 24) return `${diffH}h`;
+    const diffD = Math.floor(diffH / 24);
+    return `${diffD}d ago`;
+}
+
 function isoCutoff(days) {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     now.setDate(now.getDate() - days);
     return now.toISOString().slice(0, 10);
+}
+
+function isNewAlert(alert) {
+    if (!alert.published_date) return false;
+    const cutoff = new Date(Date.now() - NEW_ALERT_HOURS * 3600000);
+    const published = new Date(alert.published_date + "T00:00:00");
+    return published >= cutoff;
 }
 
 function renderSourceFilters(sources) {
@@ -61,7 +85,10 @@ function renderSourceFilters(sources) {
         container.appendChild(label);
     }
     container.querySelectorAll(".source-filter").forEach((node) => {
-        node.addEventListener("change", applyAndRender);
+        node.addEventListener("change", () => {
+            clearQuickFilter();
+            applyAndRender();
+        });
     });
 }
 
@@ -112,13 +139,114 @@ function sortAlerts(alerts) {
     });
 }
 
-function renderSummary(alerts, generatedAt) {
+function renderStaleness() {
+    const banner = document.getElementById("staleness-banner");
+    const ageSpan = document.getElementById("staleness-age");
+    if (!generatedAt) {
+        banner.classList.add("hidden");
+        return;
+    }
+    const genDate = new Date(generatedAt);
+    if (Number.isNaN(genDate.getTime())) {
+        banner.classList.add("hidden");
+        return;
+    }
+    const hoursOld = (Date.now() - genDate.getTime()) / 3600000;
+    if (hoursOld >= STALENESS_HOURS) {
+        const display = hoursOld >= 24
+            ? `${Math.floor(hoursOld / 24)} day${Math.floor(hoursOld / 24) !== 1 ? "s" : ""}`
+            : `${Math.floor(hoursOld)} hours`;
+        ageSpan.textContent = display;
+        banner.classList.remove("hidden");
+    } else {
+        banner.classList.add("hidden");
+    }
+}
+
+function renderNeedsAttention(filtered) {
+    const section = document.getElementById("needs-attention");
+    const list = document.getElementById("needs-attention-list");
+    list.innerHTML = "";
+
+    const urgent = filtered.filter(
+        (a) => a.severity === "CRITICAL" || a.actively_exploited
+    );
+
+    if (urgent.length === 0) {
+        section.classList.add("hidden");
+        return;
+    }
+
+    // Sort: critical+exploited first, then critical, then exploited
+    urgent.sort((a, b) => {
+        const scoreA = (a.severity === "CRITICAL" ? 2 : 0) + (a.actively_exploited ? 1 : 0);
+        const scoreB = (b.severity === "CRITICAL" ? 2 : 0) + (b.actively_exploited ? 1 : 0);
+        return scoreB - scoreA;
+    });
+
+    const shown = urgent.slice(0, 15);
+
+    for (const alert of shown) {
+        const item = document.createElement("div");
+        item.className = "attention-item";
+
+        const pill = document.createElement("span");
+        pill.className = `pill ${String(alert.severity || "UNKNOWN").toLowerCase()}`;
+        pill.textContent = alert.severity || "UNKNOWN";
+        item.appendChild(pill);
+
+        const titleWrap = document.createElement("span");
+        titleWrap.className = "attention-title";
+        const href = safeUrl(alert.url);
+        if (href) {
+            const link = document.createElement("a");
+            link.href = href;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.textContent = alert.title || alert.cve_id || "Untitled";
+            titleWrap.appendChild(link);
+        } else {
+            titleWrap.textContent = alert.title || alert.cve_id || "Untitled";
+        }
+
+        if (alert.actively_exploited) {
+            const tag = document.createElement("span");
+            tag.className = "pill critical";
+            tag.textContent = "EXPLOITED";
+            tag.style.marginLeft = "0.5rem";
+            titleWrap.appendChild(tag);
+        }
+
+        item.appendChild(titleWrap);
+
+        const meta = document.createElement("span");
+        meta.className = "attention-meta";
+        meta.textContent = alert.published_date || "";
+        item.appendChild(meta);
+
+        list.appendChild(item);
+    }
+
+    if (urgent.length > shown.length) {
+        const more = document.createElement("div");
+        more.className = "attention-item";
+        more.style.justifyContent = "center";
+        more.style.color = "var(--muted)";
+        more.textContent = `+ ${urgent.length - shown.length} more`;
+        list.appendChild(more);
+    }
+
+    section.classList.remove("hidden");
+}
+
+function renderSummary(alerts) {
+    document.getElementById("generated-at").textContent = formatTimestamp(generatedAt);
+    document.getElementById("visible-count").textContent = String(alerts.length);
+
     const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0 };
     for (const alert of alerts) {
         counts[alert.severity || "UNKNOWN"] = (counts[alert.severity || "UNKNOWN"] || 0) + 1;
     }
-    document.getElementById("generated-at").textContent = formatTimestamp(generatedAt);
-    document.getElementById("visible-count").textContent = String(alerts.length);
     document.getElementById("count-critical").textContent = String(counts.CRITICAL);
     document.getElementById("count-high").textContent = String(counts.HIGH);
     document.getElementById("count-medium").textContent = String(counts.MEDIUM);
@@ -135,6 +263,9 @@ function renderAlerts(alerts) {
         const row = template.content.firstElementChild.cloneNode(true);
         row.dataset.severity = alert.severity || "UNKNOWN";
         row.dataset.source = alert.source;
+        if (alert.actively_exploited) {
+            row.dataset.exploited = "true";
+        }
 
         const severityCell = row.querySelector(".severity-cell");
         const severityPill = document.createElement("span");
@@ -171,6 +302,14 @@ function renderAlerts(alerts) {
         } else {
             titleCell.textContent = titleText;
         }
+
+        if (isNewAlert(alert)) {
+            const newBadge = document.createElement("span");
+            newBadge.className = "new-badge";
+            newBadge.textContent = "NEW";
+            titleCell.appendChild(newBadge);
+        }
+
         if (alert.description) {
             const description = document.createElement("small");
             description.textContent = alert.description;
@@ -178,7 +317,12 @@ function renderAlerts(alerts) {
         }
 
         row.querySelector(".vendor-cell").textContent = alert.vendor || "";
-        row.querySelector(".published-cell").textContent = alert.published_date || "";
+
+        const publishedCell = row.querySelector(".published-cell");
+        const dateText = alert.published_date || "";
+        const rel = relativeTime(alert.published_date);
+        publishedCell.textContent = rel ? `${dateText} (${rel})` : dateText;
+
         row.querySelector(".exploited-cell").textContent = alert.actively_exploited ? "YES" : "";
         tbody.appendChild(row);
     }
@@ -200,9 +344,56 @@ function renderStatus() {
     }
 }
 
+// --- Quick filters ---
+
+function clearQuickFilter() {
+    quickFilterActive = null;
+    document.getElementById("qf-critical").dataset.active = "false";
+    document.getElementById("qf-exploited").dataset.active = "false";
+}
+
+function resetAllFilters() {
+    clearQuickFilter();
+    document.getElementById("days-filter").value = "30";
+    document.getElementById("search-filter").value = "";
+    document.getElementById("exploited-filter").checked = false;
+    document.querySelectorAll(".severity-filter").forEach((node) => { node.checked = true; });
+    document.querySelectorAll(".source-filter").forEach((node) => { node.checked = true; });
+    applyAndRender();
+}
+
+function activateQuickFilter(mode) {
+    if (quickFilterActive === mode) {
+        resetAllFilters();
+        return;
+    }
+    // Reset to baseline first
+    document.getElementById("search-filter").value = "";
+    document.querySelectorAll(".source-filter").forEach((node) => { node.checked = true; });
+
+    if (mode === "critical") {
+        document.querySelectorAll(".severity-filter").forEach((node) => {
+            node.checked = node.value === "CRITICAL";
+        });
+        document.getElementById("exploited-filter").checked = false;
+        quickFilterActive = "critical";
+        document.getElementById("qf-critical").dataset.active = "true";
+        document.getElementById("qf-exploited").dataset.active = "false";
+    } else if (mode === "exploited") {
+        document.querySelectorAll(".severity-filter").forEach((node) => { node.checked = true; });
+        document.getElementById("exploited-filter").checked = true;
+        quickFilterActive = "exploited";
+        document.getElementById("qf-exploited").dataset.active = "true";
+        document.getElementById("qf-critical").dataset.active = "false";
+    }
+
+    applyAndRender();
+}
+
 function applyAndRender() {
     const filtered = sortAlerts(getFilteredAlerts());
-    renderSummary(filtered, allStatus[0]?.last_fetched || "");
+    renderSummary(filtered);
+    renderNeedsAttention(filtered);
     renderAlerts(filtered);
 }
 
@@ -215,15 +406,30 @@ async function init() {
         ]);
         allAlerts = alerts;
         allStatus = status;
+        generatedAt = summary.generated_at || allStatus[0]?.last_fetched || "";
+
         renderSourceFilters(summary.sources || []);
         renderStatus();
+        renderStaleness();
 
         document.getElementById("days-filter").value = String(summary.default_days || 30);
-        document.getElementById("days-filter").addEventListener("change", applyAndRender);
-        document.getElementById("search-filter").addEventListener("input", applyAndRender);
-        document.getElementById("exploited-filter").addEventListener("change", applyAndRender);
+        document.getElementById("days-filter").addEventListener("change", () => {
+            clearQuickFilter();
+            applyAndRender();
+        });
+        document.getElementById("search-filter").addEventListener("input", () => {
+            clearQuickFilter();
+            applyAndRender();
+        });
+        document.getElementById("exploited-filter").addEventListener("change", () => {
+            clearQuickFilter();
+            applyAndRender();
+        });
         document.querySelectorAll(".severity-filter").forEach((node) => {
-            node.addEventListener("change", applyAndRender);
+            node.addEventListener("change", () => {
+                clearQuickFilter();
+                applyAndRender();
+            });
         });
         document.querySelectorAll("#alerts-table th[data-sort]").forEach((th) => {
             th.addEventListener("click", () => {
@@ -236,7 +442,11 @@ async function init() {
             });
         });
 
-        renderSummary(allAlerts, summary.generated_at);
+        // Quick filter buttons
+        document.getElementById("qf-critical").addEventListener("click", () => activateQuickFilter("critical"));
+        document.getElementById("qf-exploited").addEventListener("click", () => activateQuickFilter("exploited"));
+        document.getElementById("qf-reset").addEventListener("click", resetAllFilters);
+
         applyAndRender();
     } catch (error) {
         const tbody = document.getElementById("alerts-body");
