@@ -1,4 +1,10 @@
 const severityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, UNKNOWN: 4 };
+const sourceLabels = {
+    apple: "Apple Security Updates",
+    kev: "CISA Known Exploited Vulnerabilities",
+    msrc: "Microsoft Security Updates",
+    nvd: "NIST National Vulnerability Database",
+};
 
 let allAlerts = [];
 let allStatus = [];
@@ -32,7 +38,7 @@ function renderSourceFilters(sources) {
     for (const source of sources) {
         const label = document.createElement("label");
         label.className = "checkbox";
-        label.innerHTML = `<input class="source-filter" type="checkbox" value="${source}" checked> ${source.toUpperCase()}`;
+        label.innerHTML = `<input class="source-filter" type="checkbox" value="${source}" checked> ${sourceLabels[source] || source}`;
         container.appendChild(label);
     }
     container.querySelectorAll(".source-filter").forEach((node) => {
@@ -114,7 +120,7 @@ function renderAlerts(alerts) {
         row.querySelector(".severity-cell").innerHTML =
             `<span class="pill ${String(alert.severity || "UNKNOWN").toLowerCase()}">${alert.severity || "UNKNOWN"}</span>`;
         row.querySelector(".source-cell").innerHTML =
-            `<span class="source-tag">${alert.source.toUpperCase()}</span>`;
+            `<span class="source-tag">${sourceLabels[alert.source] || alert.source}</span>`;
 
         row.querySelector(".cve-cell").innerHTML = alert.cve_id
             ? `<a href="https://nvd.nist.gov/vuln/detail/${alert.cve_id}" target="_blank" rel="noreferrer">${alert.cve_id}</a>`
@@ -143,7 +149,7 @@ function renderStatus() {
 
     for (const item of allStatus) {
         const row = template.content.firstElementChild.cloneNode(true);
-        row.querySelector(".status-source").textContent = item.source.toUpperCase();
+        row.querySelector(".status-source").textContent = sourceLabels[item.source] || item.source;
         row.querySelector(".status-fetched").textContent = formatTimestamp(item.last_fetched);
         row.querySelector(".status-state").textContent = item.status;
         row.querySelector(".status-count").textContent = String(item.count ?? 0);
@@ -197,4 +203,3 @@ async function init() {
 }
 
 init();
-
