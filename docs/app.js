@@ -163,107 +163,6 @@ function renderStaleness() {
     }
 }
 
-function renderNeedsAttention(filtered) {
-    const section = document.getElementById("needs-attention");
-    const list = document.getElementById("needs-attention-list");
-    const subtitle = document.getElementById("needs-attention-subtitle");
-    list.innerHTML = "";
-
-    const exploited = filtered.filter((a) => a.actively_exploited);
-    const critical = filtered.filter((a) => a.severity === "CRITICAL");
-    const criticalNotExploited = critical.filter((a) => !a.actively_exploited);
-
-    if (exploited.length === 0 && critical.length === 0) {
-        section.classList.add("hidden");
-        return;
-    }
-
-    // Build subtitle summary
-    const parts = [];
-    if (exploited.length > 0) parts.push(`${exploited.length} actively exploited`);
-    if (critical.length > 0) parts.push(`${critical.length} critical severity`);
-    subtitle.textContent = parts.join(", ") + " in your current window.";
-
-    // Show exploited alerts (these are the actionable ones), max 5
-    // Then fill remaining slots with non-NVD critical (MSRC/Apple/KEV have better titles)
-    const toShow = [];
-
-    // Exploited first — sorted by date descending
-    const exploitedSorted = [...exploited].sort((a, b) =>
-        (b.published_date || "").localeCompare(a.published_date || "")
-    );
-    for (const a of exploitedSorted) {
-        if (toShow.length >= 5) break;
-        toShow.push(a);
-    }
-
-    // Fill remaining with non-NVD critical (NVD titles are just CVE IDs, not useful here)
-    if (toShow.length < 5) {
-        const nonNvdCritical = criticalNotExploited
-            .filter((a) => a.source !== "nvd")
-            .sort((a, b) => (b.published_date || "").localeCompare(a.published_date || ""));
-        for (const a of nonNvdCritical) {
-            if (toShow.length >= 5) break;
-            if (!toShow.some((t) => t.id === a.id)) toShow.push(a);
-        }
-    }
-
-    for (const alert of toShow) {
-        const item = document.createElement("div");
-        item.className = "attention-item";
-
-        const pill = document.createElement("span");
-        pill.className = `pill ${String(alert.severity || "UNKNOWN").toLowerCase()}`;
-        pill.textContent = alert.severity || "UNKNOWN";
-        item.appendChild(pill);
-
-        const titleWrap = document.createElement("span");
-        titleWrap.className = "attention-title";
-        const displayTitle = (alert.source === "nvd" && alert.cve_id)
-            ? (alert.description ? `${alert.cve_id} — ${alert.description.slice(0, 100)}` : alert.cve_id)
-            : (alert.title || alert.cve_id || "Untitled");
-        const href = safeUrl(alert.url);
-        if (href) {
-            const link = document.createElement("a");
-            link.href = href;
-            link.target = "_blank";
-            link.rel = "noreferrer";
-            link.textContent = displayTitle;
-            titleWrap.appendChild(link);
-        } else {
-            titleWrap.textContent = displayTitle;
-        }
-
-        if (alert.actively_exploited) {
-            const tag = document.createElement("span");
-            tag.className = "pill critical";
-            tag.textContent = "EXPLOITED";
-            tag.style.marginLeft = "0.5rem";
-            titleWrap.appendChild(tag);
-        }
-
-        item.appendChild(titleWrap);
-
-        const meta = document.createElement("span");
-        meta.className = "attention-meta";
-        const rel = relativeTime(alert.published_date);
-        meta.textContent = rel || alert.published_date || "";
-        item.appendChild(meta);
-
-        list.appendChild(item);
-    }
-
-    // Summary of what's not shown
-    const remaining = (exploited.length + criticalNotExploited.length) - toShow.length;
-    if (remaining > 0) {
-        const more = document.createElement("div");
-        more.className = "attention-item attention-more";
-        more.textContent = `+ ${remaining} more — use quick filters above to view all`;
-        list.appendChild(more);
-    }
-
-    section.classList.remove("hidden");
-}
 
 function renderSummary(alerts) {
     document.getElementById("generated-at").textContent = formatTimestamp(generatedAt);
@@ -419,7 +318,6 @@ function activateQuickFilter(mode) {
 function applyAndRender() {
     const filtered = sortAlerts(getFilteredAlerts());
     renderSummary(filtered);
-    renderNeedsAttention(filtered);
     renderAlerts(filtered);
 }
 
