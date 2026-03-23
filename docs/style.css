@@ -178,6 +178,12 @@ h1 {
     white-space: nowrap;
 }
 
+.attention-more {
+    justify-content: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 /* --- Severity stat cards --- */
 
 .summary {

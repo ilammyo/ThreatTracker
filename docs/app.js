@@ -166,27 +166,49 @@ function renderStaleness() {
 function renderNeedsAttention(filtered) {
     const section = document.getElementById("needs-attention");
     const list = document.getElementById("needs-attention-list");
+    const subtitle = document.getElementById("needs-attention-subtitle");
     list.innerHTML = "";
 
-    const urgent = filtered.filter(
-        (a) => a.severity === "CRITICAL" || a.actively_exploited
-    );
+    const exploited = filtered.filter((a) => a.actively_exploited);
+    const critical = filtered.filter((a) => a.severity === "CRITICAL");
+    const criticalNotExploited = critical.filter((a) => !a.actively_exploited);
 
-    if (urgent.length === 0) {
+    if (exploited.length === 0 && critical.length === 0) {
         section.classList.add("hidden");
         return;
     }
 
-    // Sort: critical+exploited first, then critical, then exploited
-    urgent.sort((a, b) => {
-        const scoreA = (a.severity === "CRITICAL" ? 2 : 0) + (a.actively_exploited ? 1 : 0);
-        const scoreB = (b.severity === "CRITICAL" ? 2 : 0) + (b.actively_exploited ? 1 : 0);
-        return scoreB - scoreA;
-    });
+    // Build subtitle summary
+    const parts = [];
+    if (exploited.length > 0) parts.push(`${exploited.length} actively exploited`);
+    if (critical.length > 0) parts.push(`${critical.length} critical severity`);
+    subtitle.textContent = parts.join(", ") + " in your current window.";
 
-    const shown = urgent.slice(0, 15);
+    // Show exploited alerts (these are the actionable ones), max 5
+    // Then fill remaining slots with non-NVD critical (MSRC/Apple/KEV have better titles)
+    const toShow = [];
 
-    for (const alert of shown) {
+    // Exploited first — sorted by date descending
+    const exploitedSorted = [...exploited].sort((a, b) =>
+        (b.published_date || "").localeCompare(a.published_date || "")
+    );
+    for (const a of exploitedSorted) {
+        if (toShow.length >= 5) break;
+        toShow.push(a);
+    }
+
+    // Fill remaining with non-NVD critical (NVD titles are just CVE IDs, not useful here)
+    if (toShow.length < 5) {
+        const nonNvdCritical = criticalNotExploited
+            .filter((a) => a.source !== "nvd")
+            .sort((a, b) => (b.published_date || "").localeCompare(a.published_date || ""));
+        for (const a of nonNvdCritical) {
+            if (toShow.length >= 5) break;
+            if (!toShow.some((t) => t.id === a.id)) toShow.push(a);
+        }
+    }
+
+    for (const alert of toShow) {
         const item = document.createElement("div");
         item.className = "attention-item";
 
@@ -197,16 +219,19 @@ function renderNeedsAttention(filtered) {
 
         const titleWrap = document.createElement("span");
         titleWrap.className = "attention-title";
+        const displayTitle = (alert.source === "nvd" && alert.cve_id)
+            ? (alert.description ? `${alert.cve_id} — ${alert.description.slice(0, 100)}` : alert.cve_id)
+            : (alert.title || alert.cve_id || "Untitled");
         const href = safeUrl(alert.url);
         if (href) {
             const link = document.createElement("a");
             link.href = href;
             link.target = "_blank";
             link.rel = "noreferrer";
-            link.textContent = alert.title || alert.cve_id || "Untitled";
+            link.textContent = displayTitle;
             titleWrap.appendChild(link);
         } else {
-            titleWrap.textContent = alert.title || alert.cve_id || "Untitled";
+            titleWrap.textContent = displayTitle;
         }
 
         if (alert.actively_exploited) {
@@ -221,18 +246,19 @@ function renderNeedsAttention(filtered) {
 
         const meta = document.createElement("span");
         meta.className = "attention-meta";
-        meta.textContent = alert.published_date || "";
+        const rel = relativeTime(alert.published_date);
+        meta.textContent = rel || alert.published_date || "";
         item.appendChild(meta);
 
         list.appendChild(item);
     }
 
-    if (urgent.length > shown.length) {
+    // Summary of what's not shown
+    const remaining = (exploited.length + criticalNotExploited.length) - toShow.length;
+    if (remaining > 0) {
         const more = document.createElement("div");
-        more.className = "attention-item";
-        more.style.justifyContent = "center";
-        more.style.color = "var(--muted)";
-        more.textContent = `+ ${urgent.length - shown.length} more`;
+        more.className = "attention-item attention-more";
+        more.textContent = `+ ${remaining} more — use quick filters above to view all`;
         list.appendChild(more);
     }
 
