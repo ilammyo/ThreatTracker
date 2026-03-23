@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThreatTracker</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <main class="page">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Threat Feed Dashboard</p>
+                <h1>ThreatTracker</h1>
+                <p class="subtitle">Static, read-only security feed aggregation for GitHub Pages.</p>
+            </div>
+            <div class="hero-meta">
+                <div class="stat-card">
+                    <span class="stat-label">Generated</span>
+                    <strong id="generated-at">Loading...</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Visible Alerts</span>
+                    <strong id="visible-count">0</strong>
+                </div>
+            </div>
+        </header>
+
+        <section class="summary" id="summary">
+            <div class="badge critical">Critical: <span id="count-critical">0</span></div>
+            <div class="badge high">High: <span id="count-high">0</span></div>
+            <div class="badge medium">Medium: <span id="count-medium">0</span></div>
+            <div class="badge low">Low: <span id="count-low">0</span></div>
+            <div class="badge unknown">Unknown: <span id="count-unknown">0</span></div>
+        </section>
+
+        <section class="panel filters">
+            <div class="filter-block">
+                <label for="days-filter">Window</label>
+                <select id="days-filter">
+                    <option value="7">Last 7 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="365">Last 365 days</option>
+                </select>
+            </div>
+            <div class="filter-block">
+                <label for="search-filter">Search</label>
+                <input id="search-filter" type="search" placeholder="CVE, vendor, title">
+            </div>
+            <div class="filter-block">
+                <span class="label">Options</span>
+                <label class="checkbox"><input id="exploited-filter" type="checkbox"> KEV-linked only</label>
+            </div>
+            <div class="filter-block grow">
+                <span class="label">Severity</span>
+                <div class="check-row">
+                    <label class="checkbox"><input class="severity-filter" type="checkbox" value="CRITICAL" checked> Critical</label>
+                    <label class="checkbox"><input class="severity-filter" type="checkbox" value="HIGH" checked> High</label>
+                    <label class="checkbox"><input class="severity-filter" type="checkbox" value="MEDIUM" checked> Medium</label>
+                    <label class="checkbox"><input class="severity-filter" type="checkbox" value="LOW" checked> Low</label>
+                    <label class="checkbox"><input class="severity-filter" type="checkbox" value="UNKNOWN" checked> Unknown</label>
+                </div>
+            </div>
+            <div class="filter-block grow">
+                <span class="label">Source</span>
+                <div class="check-row" id="source-filters"></div>
+            </div>
+        </section>
+
+        <section class="panel table-panel">
+            <div class="table-wrap">
+                <table id="alerts-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="severity">Severity</th>
+                            <th data-sort="source">Source</th>
+                            <th>CVE</th>
+                            <th data-sort="title">Title</th>
+                            <th data-sort="vendor">Vendor</th>
+                            <th data-sort="published_date" class="sorted">Published</th>
+                            <th>Exploited</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel status-panel">
+            <div class="status-header">
+                <h2>Feed Status</h2>
+                <p>Build-time fetch results from the latest GitHub Actions run.</p>
+            </div>
+            <div class="table-wrap">
+                <table id="status-table">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th>Fetched</th>
+                            <th>Status</th>
+                            <th>Count</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="status-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <template id="alert-row-template">
+        <tr>
+            <td class="severity-cell"></td>
+            <td class="source-cell"></td>
+            <td class="cve-cell"></td>
+            <td class="title-cell"></td>
+            <td class="vendor-cell"></td>
+            <td class="published-cell"></td>
+            <td class="exploited-cell"></td>
+        </tr>
+    </template>
+
+    <template id="status-row-template">
+        <tr>
+            <td class="status-source"></td>
+            <td class="status-fetched"></td>
+            <td class="status-state"></td>
+            <td class="status-count"></td>
+            <td class="status-error"></td>
+        </tr>
+    </template>
+
+    <script src="./app.js"></script>
+</body>
+</html>
+
