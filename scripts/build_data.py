@@ -22,8 +22,8 @@ DOCS_DIR = ROOT / "docs"
 DATA_DIR = DOCS_DIR / "data"
 
 USER_AGENT = "ThreatTracker/1.0"
-DEFAULT_DAYS = 30
-NVD_FETCH_DAYS = 7
+DEFAULT_DAYS = 90
+NVD_FETCH_DAYS = max(DEFAULT_DAYS, 90)
 NVD_REQUEST_DELAY = 6
 
 CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -389,11 +389,21 @@ def build() -> None:
                 }
             )
 
-    # Build a lookup of the best known severity/score for each CVE from NVD and MSRC
+    # Build lookups keyed by CVE so sparse source records can inherit richer metadata.
+    cve_metadata: dict[str, dict[str, str]] = {}
     cve_severity: dict[str, tuple[str, float | None]] = {}
     for alert in alerts:
         cve = alert.get("cve_id")
-        if not cve or alert["source"] == "kev":
+        if not cve:
+            continue
+
+        metadata = cve_metadata.setdefault(cve, {})
+        for field in ("vendor", "product"):
+            value = alert.get(field)
+            if value and not metadata.get(field):
+                metadata[field] = value
+
+        if alert["source"] == "kev":
             continue
         sev = alert.get("severity", "UNKNOWN")
         score = alert.get("cvss_score")
@@ -407,6 +417,10 @@ def build() -> None:
     kev_cves = {alert["cve_id"] for alert in alerts if alert["source"] == "kev" and alert.get("cve_id")}
     for alert in alerts:
         cve = alert.get("cve_id")
+        if cve in cve_metadata:
+            for field, value in cve_metadata[cve].items():
+                if not alert.get(field):
+                    alert[field] = value
         if cve in kev_cves and alert["source"] != "kev":
             alert["actively_exploited"] = 1
         # Inherit severity from NVD/MSRC for KEV and any other UNKNOWN-severity alerts

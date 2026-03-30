@@ -124,13 +124,16 @@ function getFilteredAlerts() {
             alert.product,
             alert.description,
             alert.source,
+            sourceLabels[alert.source],
         ].join(" ").toLowerCase();
+        const matchesSearch = !search || haystack.includes(search);
+        const withinWindow = alert.published_date >= cutoff;
 
-        return alert.published_date >= cutoff
+        return (withinWindow || (Boolean(search) && matchesSearch))
             && activeSeverities.has(alert.severity || "UNKNOWN")
             && activeSources.has(alert.source)
             && (!exploitedOnly || Boolean(alert.actively_exploited))
-            && (!search || haystack.includes(search));
+            && matchesSearch;
     });
 }
 
