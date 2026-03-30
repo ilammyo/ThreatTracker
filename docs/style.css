@@ -242,6 +242,12 @@ input[type="search"] {
     overflow-x: auto;
 }
 
+#table-meta {
+    margin: 0.3rem 0 0.75rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;

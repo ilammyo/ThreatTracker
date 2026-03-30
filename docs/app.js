@@ -8,12 +8,28 @@ const sourceLabels = {
 
 const STALENESS_HOURS = 8;
 const NEW_ALERT_HOURS = 48;
+const SEARCH_INPUT_DELAY_MS = 150;
+const MAX_RENDERED_ALERTS = 500;
 
 let allAlerts = [];
 let allStatus = [];
 let generatedAt = "";
+let defaultWindowDays = 30;
 let currentSort = { key: "published_date", desc: true };
 let quickFilterActive = null; // "critical" | "exploited" | null
+let searchInputTimer = null;
+
+function buildSearchText(alert) {
+    return [
+        alert.cve_id,
+        alert.title,
+        alert.vendor,
+        alert.product,
+        alert.description,
+        alert.source,
+        sourceLabels[alert.source],
+    ].join(" ").toLowerCase();
+}
 
 function parseDateValue(value) {
     if (!value) return null;
@@ -117,16 +133,7 @@ function getFilteredAlerts() {
     );
 
     return allAlerts.filter((alert) => {
-        const haystack = [
-            alert.cve_id,
-            alert.title,
-            alert.vendor,
-            alert.product,
-            alert.description,
-            alert.source,
-            sourceLabels[alert.source],
-        ].join(" ").toLowerCase();
-        const matchesSearch = !search || haystack.includes(search);
+        const matchesSearch = !search || alert.search_text.includes(search);
         const withinWindow = alert.published_date >= cutoff;
 
         return (withinWindow || (Boolean(search) && matchesSearch))
@@ -194,12 +201,26 @@ function renderSummary(alerts) {
     document.getElementById("count-unknown").textContent = String(counts.UNKNOWN);
 }
 
+function renderTableMeta(totalAlerts) {
+    const tableMeta = document.getElementById("table-meta");
+    if (!tableMeta) return;
+
+    if (totalAlerts <= MAX_RENDERED_ALERTS) {
+        tableMeta.textContent = "";
+        return;
+    }
+
+    tableMeta.textContent = `Showing the first ${MAX_RENDERED_ALERTS} of ${totalAlerts.toLocaleString()} matching alerts. Narrow the filters or search to reduce the result set.`;
+}
+
 function renderAlerts(alerts) {
     const tbody = document.getElementById("alerts-body");
     const template = document.getElementById("alert-row-template");
     tbody.innerHTML = "";
+    renderTableMeta(alerts.length);
+    const fragment = document.createDocumentFragment();
 
-    for (const alert of alerts) {
+    for (const alert of alerts.slice(0, MAX_RENDERED_ALERTS)) {
         const row = template.content.firstElementChild.cloneNode(true);
         row.dataset.severity = alert.severity || "UNKNOWN";
         row.dataset.source = alert.source;
@@ -260,12 +281,13 @@ function renderAlerts(alerts) {
 
         const publishedCell = row.querySelector(".published-cell");
         const dateText = alert.published_date || "";
-        const rel = relativeTime(alert.published_date);
+        const rel = alert.relative_published || relativeTime(alert.published_date);
         publishedCell.textContent = rel ? `${dateText} (${rel})` : dateText;
 
         row.querySelector(".exploited-cell").textContent = alert.actively_exploited ? "YES" : "";
-        tbody.appendChild(row);
+        fragment.appendChild(row);
     }
+    tbody.appendChild(fragment);
 }
 
 function renderStatus() {
@@ -294,7 +316,7 @@ function clearQuickFilter() {
 
 function resetAllFilters() {
     clearQuickFilter();
-    document.getElementById("days-filter").value = "30";
+    document.getElementById("days-filter").value = String(defaultWindowDays);
     document.getElementById("search-filter").value = "";
     document.getElementById("exploited-filter").checked = false;
     document.querySelectorAll(".severity-filter").forEach((node) => { node.checked = true; });
@@ -336,6 +358,17 @@ function applyAndRender() {
     renderAlerts(filtered);
 }
 
+function scheduleSearchRender() {
+    if (searchInputTimer) {
+        window.clearTimeout(searchInputTimer);
+    }
+    searchInputTimer = window.setTimeout(() => {
+        searchInputTimer = null;
+        clearQuickFilter();
+        applyAndRender();
+    }, SEARCH_INPUT_DELAY_MS);
+}
+
 async function init() {
     try {
         const [alerts, status, summary] = await Promise.all([
@@ -343,23 +376,25 @@ async function init() {
             loadJson("./data/status.json"),
             loadJson("./data/summary.json"),
         ]);
-        allAlerts = alerts;
+        allAlerts = alerts.map((alert) => ({
+            ...alert,
+            relative_published: relativeTime(alert.published_date),
+            search_text: buildSearchText(alert),
+        }));
         allStatus = status;
         generatedAt = summary.generated_at || allStatus[0]?.last_fetched || "";
+        defaultWindowDays = Number(summary.default_days || 30);
 
         renderSourceFilters(summary.sources || []);
         renderStatus();
         renderStaleness();
 
-        document.getElementById("days-filter").value = String(summary.default_days || 30);
+        document.getElementById("days-filter").value = String(defaultWindowDays);
         document.getElementById("days-filter").addEventListener("change", () => {
             clearQuickFilter();
             applyAndRender();
         });
-        document.getElementById("search-filter").addEventListener("input", () => {
-            clearQuickFilter();
-            applyAndRender();
-        });
+        document.getElementById("search-filter").addEventListener("input", scheduleSearchRender);
         document.getElementById("exploited-filter").addEventListener("change", () => {
             clearQuickFilter();
             applyAndRender();
