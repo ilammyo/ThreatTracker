@@ -47,6 +47,10 @@ NVD_PAGE_SIZE = 2000       # API maximum
 NVD_API_KEY = os.environ.get("NVD_API_KEY", "").strip()
 NVD_REQUEST_DELAY = 1.0 if NVD_API_KEY else 6.5   # 50 req/30s with key, 5 req/30s without
 APPLE_DETAIL_LIMIT = 80
+# Time budgets (seconds). A source that exceeds its budget stops where it is
+# and reports status "partial" instead of risking the job timeout.
+NVD_TIME_BUDGET = int(os.environ.get("NVD_TIME_BUDGET", "600"))
+APPLE_TIME_BUDGET = int(os.environ.get("APPLE_TIME_BUDGET", "120"))
 PREVIOUS_DATA_URL = os.environ.get(
     "PREVIOUS_DATA_URL", "https://ilammyo.github.io/ThreatTracker/data/alerts.json"
 )
@@ -132,12 +136,15 @@ def _http_get(url: str, headers: dict[str, str], timeout: int) -> bytes:
     ctx = ssl.create_default_context()
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
-        return resp.read()
+        body = resp.read()
+        if (resp.headers.get("Content-Encoding") or "").lower() == "gzip" and not url.endswith(".gz"):
+            body = gzip.decompress(body)
+        return body
 
 
 def fetch(url: str, extra_headers: dict[str, str] | None = None, retries: int = 3, timeout: int = 90) -> bytes:
     """GET with retry/backoff on transient failures."""
-    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
+    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity" if url.endswith(".gz") else "gzip"}
     if extra_headers:
         headers.update(extra_headers)
     cache_path: Path | None = None
@@ -156,7 +163,7 @@ def fetch(url: str, extra_headers: dict[str, str] | None = None, retries: int = 
         except urllib.error.HTTPError as exc:
             last_exc = exc
             if exc.code in (403, 429, 500, 502, 503, 504) and attempt < retries - 1:
-                wait = 10 * (attempt + 1)
+                wait = 6 * (attempt + 1)
                 log(f"  HTTP {exc.code} from {url[:80]} - retrying in {wait}s")
                 time.sleep(wait)
                 continue
@@ -164,7 +171,7 @@ def fetch(url: str, extra_headers: dict[str, str] | None = None, retries: int = 
         except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
             last_exc = exc
             if attempt < retries - 1:
-                wait = 10 * (attempt + 1)
+                wait = 6 * (attempt + 1)
                 log(f"  {type(exc).__name__} from {url[:80]} - retrying in {wait}s")
                 time.sleep(wait)
                 continue
@@ -397,22 +404,27 @@ def nvd_extract(cve: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def nvd_query(params: str) -> list[dict[str, Any]]:
-    """Page through an NVD query; returns raw CVE records."""
+def nvd_query(params: str, budget: float | None = None) -> tuple[list[dict[str, Any]], bool]:
+    """Page through an NVD query. Returns (raw CVE records, complete)."""
     records: list[dict[str, Any]] = []
     start_index = 0
     headers = {"apiKey": NVD_API_KEY} if NVD_API_KEY else None
+    started = time.monotonic()
     while True:
         url = f"{NVD_API_URL}?{params}&startIndex={start_index}&resultsPerPage={NVD_PAGE_SIZE}"
-        data = json.loads(fetch(url, headers, retries=4))
+        page_started = time.monotonic()
+        data = json.loads(fetch(url, headers, retries=3, timeout=120))
         page = data.get("vulnerabilities", [])
         records.extend(item.get("cve", {}) for item in page)
         total = data.get("totalResults", 0)
         start_index += NVD_PAGE_SIZE
+        log(f"  nvd page {start_index // NVD_PAGE_SIZE}: {len(records)}/{total} in {time.monotonic() - page_started:.1f}s")
         if start_index >= total or not page:
-            break
+            return records, True
+        if budget is not None and time.monotonic() - started > budget:
+            log(f"  nvd: time budget of {budget:.0f}s exceeded with {len(records)}/{total}; stopping early")
+            return records, False
         time.sleep(NVD_REQUEST_DELAY)
-    return records
 
 
 def fetch_nvd() -> FetchResult:
@@ -420,7 +432,8 @@ def fetch_nvd() -> FetchResult:
     start = end - timedelta(days=DEFAULT_DAYS)
     params = f"pubStartDate={start.strftime('%Y-%m-%dT00:00:00.000')}&pubEndDate={end.strftime('%Y-%m-%dT23:59:59.999')}"
     alerts = []
-    for cve in nvd_query(params):
+    records, complete = nvd_query(params, budget=NVD_TIME_BUDGET)
+    for cve in records:
         cve_id = cve.get("id", "")
         info = nvd_extract(cve)
         if info["status"] == "Rejected":
@@ -440,6 +453,8 @@ def fetch_nvd() -> FetchResult:
                 url=f"https://nvd.nist.gov/vuln/detail/{cve_id}",
             )
         )
+    if not complete:
+        return FetchResult("nvd", alerts, status="partial", note="NVD time budget exceeded; newest CVEs may be missing until the next run")
     return FetchResult("nvd", alerts)
 
 
@@ -448,7 +463,8 @@ def fetch_nvd_kev_lookup() -> dict[str, dict[str, Any]]:
     that fall outside the 90-day NVD publish window."""
     time.sleep(NVD_REQUEST_DELAY)
     lookup = {}
-    for cve in nvd_query("hasKev"):
+    records, _complete = nvd_query("hasKev", budget=180)
+    for cve in records:
         lookup[cve.get("id", "")] = nvd_extract(cve)
     return lookup
 
@@ -587,6 +603,8 @@ def fetch_apple(previous: dict[str, dict[str, Any]]) -> FetchResult:
     cutoff = days_ago_iso(DEFAULT_DAYS)
     alerts = []
     detail_fetches = 0
+    skipped_for_time = 0
+    started = time.monotonic()
     for row in parser.rows:
         if len(row) < 2:
             continue
@@ -612,10 +630,12 @@ def fetch_apple(previous: dict[str, dict[str, Any]]) -> FetchResult:
             cve_ids = prev.get("cve_ids", [])
             exploited = bool(prev.get("actively_exploited"))
             description = prev.get("description")
+        elif link and published >= cutoff and not no_cves and detail_fetches < APPLE_DETAIL_LIMIT and (time.monotonic() - started) > APPLE_TIME_BUDGET:
+            skipped_for_time += 1
         elif link and published >= cutoff and not no_cves and detail_fetches < APPLE_DETAIL_LIMIT:
             detail_fetches += 1
             try:
-                html = fetch(link, retries=2, timeout=45).decode("utf-8", errors="replace")
+                html = fetch(link, retries=1, timeout=30).decode("utf-8", errors="replace")
                 text = strip_html(html)
                 cve_ids = sorted(set(CVE_RE.findall(text)))
                 exploited = bool(re.search(r"may have been (actively )?exploited", text, re.I))
@@ -644,7 +664,10 @@ def fetch_apple(previous: dict[str, dict[str, Any]]) -> FetchResult:
                 exploit_source="vendor" if exploited else None,
             )
         )
-    return FetchResult("apple", alerts, note=f"{detail_fetches} detail pages fetched")
+    note = f"{detail_fetches} detail pages fetched"
+    if skipped_for_time:
+        note += f"; {skipped_for_time} skipped for time, retried next run"
+    return FetchResult("apple", alerts, status="partial" if skipped_for_time else "ok", note=note)
 
 
 def fetch_fortinet() -> FetchResult:

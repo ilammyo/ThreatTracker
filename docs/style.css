@@ -643,7 +643,8 @@ tr[data-dismissed="true"] td {
 }
 
 #status-table tr[data-status="error"] .status-state { color: var(--critical); font-weight: 700; }
-#status-table tr[data-status="stale"] .status-state { color: var(--medium); font-weight: 700; }
+#status-table tr[data-status="stale"] .status-state,
+#status-table tr[data-status="partial"] .status-state { color: var(--medium); font-weight: 700; }
 #status-table tr[data-status="ok"] .status-state { color: var(--accent); }
 
 @media (max-width: 900px) {

@@ -510,7 +510,7 @@ function renderStaleness() {
     }
 
     const warning = document.getElementById("feed-warning");
-    const broken = allStatus.filter((s) => s.status === "error" || s.status === "stale");
+    const broken = allStatus.filter((s) => s.status === "error" || s.status === "stale" || s.status === "partial");
     if (broken.length) {
         warning.textContent = `Feed problems: ${broken.map((s) => `${sourceLabels[s.source] || s.source} (${s.status})`).join(", ")}. See Feed Status below.`;
         warning.classList.remove("hidden");
