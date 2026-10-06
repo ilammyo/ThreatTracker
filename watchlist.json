@@ -1,0 +1,330 @@
+{
+  "_comment": "Products in CTA's stack. Alerts matching any entry get relevant=true and the entry name in matched[]. terms: whole-word, case-insensitive, matched against vendor, product, title AND description - only for distinctive names. strict_terms: matched against vendor, product and title only - for words that show up in unrelated descriptions. cpe_vendors: matched against the PRIMARY vendor of an NVD CPE string. exclude_products: skip the match when the product field contains one of these. msrc_families: which Microsoft product families count as relevant. cpe_products: when set, a CPE vendor hit also requires one of these in the product.",
+  "epss_threshold": 0.5,
+  "entries": [
+    {
+      "name": "Microsoft",
+      "terms": [],
+      "strict_terms": [
+        "microsoft",
+        "windows",
+        "outlook",
+        "active directory",
+        "hyper-v",
+        "sql server",
+        "sharepoint",
+        "onedrive",
+        "exchange server",
+        "exchange online",
+        "microsoft edge",
+        "microsoft teams",
+        "microsoft defender",
+        "office",
+        "microsoft 365",
+        "office 365",
+        "entra",
+        "azure ad",
+        "intune"
+      ],
+      "cpe_vendors": [
+        "microsoft"
+      ],
+      "exclude_products": [
+        "azure linux",
+        "cbl-mariner",
+        "azl3",
+        "azl2"
+      ],
+      "msrc_families": [
+        "Windows",
+        "ESU",
+        "Browser",
+        "Microsoft Office",
+        "Apps",
+        "Server Software",
+        "Azure",
+        "SQL Server",
+        "Exchange Server",
+        "Microsoft Dynamics",
+        "Other"
+      ]
+    },
+    {
+      "name": "Apple",
+      "terms": [],
+      "strict_terms": [
+        "apple",
+        "macos",
+        "ios",
+        "ipados",
+        "safari",
+        "webkit",
+        "iphone",
+        "ipad",
+        "xcode"
+      ],
+      "cpe_vendors": [
+        "apple"
+      ]
+    },
+    {
+      "name": "Okta",
+      "terms": [
+        "okta",
+        "auth0"
+      ],
+      "strict_terms": [],
+      "cpe_vendors": [
+        "okta",
+        "auth0"
+      ]
+    },
+    {
+      "name": "Fortinet",
+      "terms": [
+        "fortinet",
+        "fortigate",
+        "fortios",
+        "forticlient",
+        "fortimanager",
+        "fortianalyzer",
+        "fortiproxy",
+        "fortiweb",
+        "fortiswitch",
+        "fortiap",
+        "fortiauthenticator",
+        "fortinac",
+        "fortiedr",
+        "fortisiem",
+        "fortimail",
+        "fortisandbox",
+        "fortiwlc"
+      ],
+      "strict_terms": [],
+      "cpe_vendors": [
+        "fortinet"
+      ]
+    },
+    {
+      "name": "SentinelOne",
+      "terms": [
+        "sentinelone",
+        "sentinel one"
+      ],
+      "strict_terms": [
+        "singularity"
+      ],
+      "cpe_vendors": [
+        "sentinelone"
+      ]
+    },
+    {
+      "name": "Qualys",
+      "terms": [
+        "qualys"
+      ],
+      "strict_terms": [],
+      "cpe_vendors": [
+        "qualys"
+      ]
+    },
+    {
+      "name": "Kolide",
+      "terms": [
+        "kolide"
+      ],
+      "strict_terms": [
+        "osquery"
+      ],
+      "cpe_vendors": [
+        "kolide",
+        "osquery"
+      ]
+    },
+    {
+      "name": "Box",
+      "terms": [
+        "box.com",
+        "box drive",
+        "box sync"
+      ],
+      "strict_terms": [
+        "box"
+      ],
+      "cpe_vendors": [
+        "box"
+      ]
+    },
+    {
+      "name": "Zoom",
+      "terms": [
+        "zoom workplace",
+        "zoom rooms",
+        "zoom phone"
+      ],
+      "strict_terms": [
+        "zoom"
+      ],
+      "cpe_vendors": [
+        "zoom"
+      ]
+    },
+    {
+      "name": "Slack",
+      "terms": [],
+      "strict_terms": [
+        "slack"
+      ],
+      "cpe_vendors": [
+        "slack"
+      ]
+    },
+    {
+      "name": "Glean",
+      "terms": [],
+      "strict_terms": [
+        "glean"
+      ],
+      "cpe_vendors": [
+        "glean"
+      ]
+    },
+    {
+      "name": "Trelica",
+      "terms": [
+        "trelica"
+      ],
+      "strict_terms": [],
+      "cpe_vendors": [
+        "trelica"
+      ]
+    },
+    {
+      "name": "1Password",
+      "terms": [
+        "1password",
+        "agilebits"
+      ],
+      "strict_terms": [],
+      "cpe_vendors": [
+        "1password",
+        "agilebits"
+      ]
+    },
+    {
+      "name": "AWS",
+      "terms": [
+        "amazon web services"
+      ],
+      "strict_terms": [
+        "aws",
+        "amazon"
+      ],
+      "cpe_vendors": [
+        "amazon",
+        "amazonaws",
+        "aws"
+      ]
+    },
+    {
+      "name": "Google Chrome",
+      "terms": [],
+      "strict_terms": [
+        "google chrome",
+        "chrome",
+        "chromium"
+      ],
+      "cpe_vendors": [
+        "google"
+      ],
+      "cpe_products": [
+        "chrome"
+      ]
+    },
+    {
+      "name": "Adobe",
+      "terms": [],
+      "strict_terms": [
+        "acrobat",
+        "adobe reader",
+        "acrobat reader",
+        "creative cloud",
+        "photoshop",
+        "illustrator",
+        "indesign",
+        "premiere",
+        "after effects",
+        "lightroom"
+      ],
+      "cpe_vendors": [
+        "adobe"
+      ],
+      "cpe_products": [
+        "acrobat",
+        "reader",
+        "creative cloud",
+        "photoshop",
+        "illustrator",
+        "indesign",
+        "premiere",
+        "after effects",
+        "lightroom"
+      ]
+    },
+    {
+      "name": "Atlassian",
+      "terms": [],
+      "strict_terms": [
+        "atlassian",
+        "confluence",
+        "jira",
+        "bitbucket"
+      ],
+      "cpe_vendors": [
+        "atlassian"
+      ]
+    },
+    {
+      "name": "HubSpot",
+      "terms": [],
+      "strict_terms": [
+        "hubspot"
+      ],
+      "cpe_vendors": [
+        "hubspot"
+      ]
+    },
+    {
+      "name": "Asana",
+      "terms": [],
+      "strict_terms": [
+        "asana"
+      ],
+      "cpe_vendors": [
+        "asana"
+      ]
+    },
+    {
+      "name": "KnowBe4",
+      "terms": [],
+      "strict_terms": [
+        "knowbe4"
+      ],
+      "cpe_vendors": [
+        "knowbe4"
+      ]
+    },
+    {
+      "name": "GitHub",
+      "terms": [
+        "github enterprise"
+      ],
+      "strict_terms": [
+        "github"
+      ],
+      "cpe_vendors": [
+        "github"
+      ]
+    }
+  ]
+}

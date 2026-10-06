@@ -79,7 +79,7 @@ h1 {
 
 .hero-meta {
     display: grid;
-    grid-template-columns: repeat(2, minmax(150px, 1fr));
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
     gap: 0.8rem;
 }
 
@@ -358,5 +358,299 @@ small {
 
     .severity-stat .stat-number {
         font-size: 1.5rem;
+    }
+}
+
+/* --- Brief --- */
+
+.brief {
+    padding: 1rem 1.1rem 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.brief-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.brief-header h2 {
+    margin: 0;
+    font-size: 1.35rem;
+}
+
+.brief-header p {
+    margin: 0.3rem 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.brief-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.brief-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 1rem;
+}
+
+.brief-col h3 {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+}
+
+.brief-col h3 .count {
+    color: var(--muted);
+    font-weight: 500;
+    margin-left: 0.3rem;
+}
+
+.brief-col[data-list="exploited"] h3 { color: var(--critical); }
+.brief-col[data-list="stack"] h3 { color: var(--high); }
+.brief-col[data-list="due"] h3 { color: var(--medium); }
+.brief-col[data-list="releases"] h3 { color: var(--link); }
+
+.brief-hint {
+    margin: 0 0 0.6rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.brief-col ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.brief-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.7rem;
+    padding: 0.55rem 0.65rem;
+}
+
+.brief-item.dismissed {
+    opacity: 0.5;
+}
+
+.brief-item-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.brief-pills {
+    display: inline-flex;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    padding-top: 0.1rem;
+}
+
+.brief-pills .pill,
+.brief-pills .source-tag {
+    font-size: 0.68rem;
+    padding: 0.12rem 0.45rem;
+}
+
+.brief-title {
+    flex: 1 1 auto;
+    font-weight: 600;
+    font-size: 0.92rem;
+    line-height: 1.3;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.brief-title:hover {
+    color: var(--link);
+    text-decoration: underline;
+}
+
+.brief-meta {
+    margin-top: 0.3rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.brief-action {
+    margin-top: 0.35rem;
+    color: var(--medium);
+    font-size: 0.78rem;
+}
+
+.brief-empty {
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 0.3rem 0.1rem;
+}
+
+.dismiss {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    border-radius: 0.4rem;
+    width: 1.6rem;
+    height: 1.6rem;
+    line-height: 1;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.dismiss:hover {
+    color: var(--text);
+    border-color: var(--panel-border);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* --- Scope bar and chips --- */
+
+.scope-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.segmented {
+    display: inline-flex;
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--panel);
+}
+
+.seg-btn {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.seg-btn[data-active="true"] {
+    background: rgba(47, 221, 146, 0.18);
+    color: var(--accent);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.chip {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 0.28rem 0.7rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.chip:hover {
+    color: var(--text);
+    border-color: var(--muted);
+}
+
+.chip.quiet {
+    opacity: 0.55;
+}
+
+.chip[data-active="true"] {
+    background: rgba(122, 211, 255, 0.15);
+    color: var(--link);
+    border-color: var(--link);
+    opacity: 1;
+}
+
+.quick-btn.small {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.78rem;
+}
+
+/* --- Extra pills, badges, cells --- */
+
+.severity-stat.exploited { border-color: rgba(255, 90, 95, 0.5); }
+.severity-stat.exploited .stat-number { color: var(--critical); }
+
+.pill.ransomware { background: rgba(255, 90, 95, 0.25); color: #ffb3b5; }
+.pill.new { background: rgba(47, 221, 146, 0.2); color: var(--accent); }
+
+.stack-badge {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    font-weight: 600;
+    font-size: 0.7rem;
+    background: rgba(122, 211, 255, 0.12);
+    color: var(--link);
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+.epss {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
+
+.epss.warm { color: var(--medium); font-weight: 600; }
+.epss.hot { color: var(--critical); font-weight: 700; }
+
+small.overdue,
+.ransomware-note {
+    color: var(--critical);
+    font-weight: 600;
+}
+
+small.required-action {
+    color: var(--medium);
+}
+
+.group-row td {
+    background: rgba(122, 211, 255, 0.07);
+    color: var(--link);
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+}
+
+tr[data-dismissed="true"] td {
+    opacity: 0.45;
+}
+
+.action-cell {
+    width: 2.5rem;
+    text-align: right;
+}
+
+#status-table tr[data-status="error"] .status-state { color: var(--critical); font-weight: 700; }
+#status-table tr[data-status="stale"] .status-state { color: var(--medium); font-weight: 700; }
+#status-table tr[data-status="ok"] .status-state { color: var(--accent); }
+
+@media (max-width: 900px) {
+    .hero-meta {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .brief-grid {
+        grid-template-columns: 1fr;
     }
 }

@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
     <title>ThreatTracker</title>
-    <link rel="stylesheet" href="./style.css?v=20260323e">
+    <link rel="stylesheet" href="./style.css?v=__BUILD__">
 </head>
 <body>
     <main class="page">
@@ -12,12 +13,16 @@
             <div>
                 <p class="eyebrow">Threat Feed Dashboard</p>
                 <h1>ThreatTracker</h1>
-                <p class="subtitle">Static, read-only security feed aggregation for GitHub Pages.</p>
+                <p class="subtitle">Vulnerability and advisory feed, filtered to the products we run.</p>
             </div>
             <div class="hero-meta">
                 <div class="stat-card">
                     <span class="stat-label">Generated</span>
                     <strong id="generated-at">Loading...</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">New since last build</span>
+                    <strong id="new-count">0</strong>
                 </div>
                 <div class="stat-card">
                     <span class="stat-label">Visible Alerts</span>
@@ -29,8 +34,52 @@
         <div id="staleness-banner" class="staleness-banner hidden">
             Data last refreshed <span id="staleness-age"></span> ago. Feed pipeline may need attention.
         </div>
+        <div id="feed-warning" class="staleness-banner hidden"></div>
 
-<section class="summary" id="summary">
+        <section class="panel brief" id="brief">
+            <div class="brief-header">
+                <div>
+                    <h2>This week</h2>
+                    <p id="brief-subtitle">What needs attention, in priority order.</p>
+                </div>
+                <div class="brief-controls">
+                    <label class="checkbox"><input id="show-dismissed" type="checkbox"> Show dismissed (<span id="dismissed-count">0</span>)</label>
+                    <button class="quick-btn small" id="clear-dismissed">Clear dismissed</button>
+                </div>
+            </div>
+            <div class="brief-grid">
+                <div class="brief-col" data-list="exploited">
+                    <h3>Exploited in the wild <span class="count" id="brief-count-exploited"></span></h3>
+                    <p class="brief-hint">Vendor-confirmed zero-days and new CISA KEV additions, last 7 days.</p>
+                    <ul id="brief-exploited"></ul>
+                </div>
+                <div class="brief-col" data-list="stack">
+                    <h3>Stack: critical or likely exploited <span class="count" id="brief-count-stack"></span></h3>
+                    <p class="brief-hint">Watchlist products rated Critical, or EPSS above threshold, last 14 days.</p>
+                    <ul id="brief-stack"></ul>
+                </div>
+                <div class="brief-col" data-list="due">
+                    <h3>KEV remediation due <span class="count" id="brief-count-due"></span></h3>
+                    <p class="brief-hint">CISA due dates in the next 14 days, or overdue in the last 7.</p>
+                    <ul id="brief-due"></ul>
+                </div>
+                <div class="brief-col" data-list="releases">
+                    <h3>Patch releases <span class="count" id="brief-count-releases"></span></h3>
+                    <p class="brief-hint">Apple, Chrome, Fortinet, Zoom, AWS and Okta releases, last 14 days.</p>
+                    <ul id="brief-releases"></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="scope-bar">
+            <div class="segmented" role="group" aria-label="Scope">
+                <button class="seg-btn" id="scope-stack" data-active="true">My stack</button>
+                <button class="seg-btn" id="scope-all" data-active="false">Everything</button>
+            </div>
+            <div class="chips" id="stack-chips"></div>
+        </section>
+
+        <section class="summary" id="summary">
             <div class="stat-card severity-stat critical">
                 <span class="stat-number" id="count-critical">0</span>
                 <span class="stat-label">Critical</span>
@@ -51,11 +100,16 @@
                 <span class="stat-number" id="count-unknown">0</span>
                 <span class="stat-label">Unknown</span>
             </div>
+            <div class="stat-card severity-stat exploited">
+                <span class="stat-number" id="count-exploited">0</span>
+                <span class="stat-label">Exploited</span>
+            </div>
         </section>
 
         <section class="quick-filters">
             <button class="quick-btn" id="qf-critical" data-active="false">Critical Only</button>
             <button class="quick-btn" id="qf-exploited" data-active="false">Exploited Only</button>
+            <button class="quick-btn" id="qf-new" data-active="false">New (48h)</button>
             <button class="quick-btn" id="qf-reset">Reset Filters</button>
         </section>
 
@@ -64,18 +118,20 @@
                 <label for="days-filter">Window</label>
                 <select id="days-filter">
                     <option value="7">Last 7 days</option>
+                    <option value="14">Last 14 days</option>
                     <option value="30" selected>Last 30 days</option>
                     <option value="90">Last 90 days</option>
-                    <option value="365">Last 365 days</option>
                 </select>
             </div>
             <div class="filter-block">
                 <label for="search-filter">Search</label>
-                <input id="search-filter" type="search" placeholder="CVE, vendor, title">
+                <input id="search-filter" type="search" placeholder="CVE, vendor, product, title">
             </div>
             <div class="filter-block">
                 <span class="label">Options</span>
                 <label class="checkbox"><input id="exploited-filter" type="checkbox"> Actively exploited</label>
+                <label class="checkbox"><input id="hide-dismissed-filter" type="checkbox"> Hide dismissed</label>
+                <label class="checkbox" title="NVD rows for CVEs that a vendor advisory or KEV row already covers"><input id="hide-shadowed-filter" type="checkbox" checked> Hide NVD duplicates</label>
             </div>
             <div class="filter-block grow">
                 <span class="label">Severity</span>
@@ -104,8 +160,10 @@
                             <th>CVE</th>
                             <th data-sort="title">Title</th>
                             <th data-sort="vendor">Vendor</th>
+                            <th data-sort="epss" title="EPSS: probability of exploitation in the next 30 days">EPSS</th>
                             <th data-sort="published_date" class="sorted">Published</th>
                             <th>Exploited</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody id="alerts-body"></tbody>
@@ -116,7 +174,7 @@
         <section class="panel status-panel">
             <div class="status-header">
                 <h2>Feed Status</h2>
-                <p>Build-time fetch results from the latest GitHub Actions run.</p>
+                <p>Build-time fetch results from the latest GitHub Actions run. "stale" means the fetch failed and the previous build's rows were reused.</p>
             </div>
             <div class="table-wrap">
                 <table id="status-table">
@@ -126,7 +184,7 @@
                             <th>Fetched</th>
                             <th>Status</th>
                             <th>Count</th>
-                            <th>Error</th>
+                            <th>Note</th>
                         </tr>
                     </thead>
                     <tbody id="status-body"></tbody>
@@ -142,8 +200,10 @@
             <td class="cve-cell"></td>
             <td class="title-cell"></td>
             <td class="vendor-cell"></td>
+            <td class="epss-cell"></td>
             <td class="published-cell"></td>
             <td class="exploited-cell"></td>
+            <td class="action-cell"></td>
         </tr>
     </template>
 
@@ -157,6 +217,17 @@
         </tr>
     </template>
 
-    <script src="./app.js?v=20260330c"></script>
+    <template id="brief-item-template">
+        <li class="brief-item">
+            <div class="brief-item-top">
+                <span class="brief-pills"></span>
+                <a class="brief-title" target="_blank" rel="noreferrer"></a>
+                <button class="dismiss" title="Dismiss from brief" aria-label="Dismiss">&times;</button>
+            </div>
+            <div class="brief-meta"></div>
+        </li>
+    </template>
+
+    <script src="./app.js?v=__BUILD__"></script>
 </body>
 </html>
