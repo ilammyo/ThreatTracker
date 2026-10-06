@@ -341,11 +341,16 @@ def fetch_kev() -> FetchResult:
     alerts = []
     for vuln in data.get("vulnerabilities", []):
         cve_id = vuln.get("cveID", "")
+        vendor = vuln.get("vendorProject", "") or ""
+        product = vuln.get("product", "") or ""
+        name = vuln.get("vulnerabilityName", "") or ""
+        # KEV names usually already start with "<vendor> <product>"; avoid "Apple Multiple Products - Apple Multiple Products ..."
+        title = name if name.lower().startswith(f"{vendor} {product}".strip().lower()) or product.lower() in name.lower() else f"{vendor} {product} - {name}".strip(" -")
         alerts.append(
             make_alert(
                 "kev",
                 f"kev:{cve_id}",
-                f"{vuln.get('vendorProject', '')} {vuln.get('product', '')} - {vuln.get('vulnerabilityName', '')}".strip(),
+                title,
                 normalize_date(vuln.get("dateAdded", "")),
                 cve_id=cve_id,
                 description=vuln.get("shortDescription"),
@@ -961,7 +966,8 @@ def load_previous() -> dict[str, dict[str, Any]]:
     loaded = False
     if PREVIOUS_DATA_URL:
         for suffix in ("", "-tail"):
-            url = PREVIOUS_DATA_URL.replace("alerts.json", f"alerts{suffix}.json")
+            # Cache-buster: GitHub Pages' CDN may otherwise serve the previous deploy for up to 10 minutes.
+            url = PREVIOUS_DATA_URL.replace("alerts.json", f"alerts{suffix}.json") + f"?build={int(time.time())}"
             try:
                 rows.extend(json.loads(fetch(url, retries=2, timeout=120)))
                 loaded = True
@@ -1051,6 +1057,15 @@ def enrich(alerts: list[dict[str, Any]], previous: dict[str, dict[str, Any]], ru
            kev_lookup: dict[str, dict[str, Any]], epss: dict[str, tuple[float, float]]) -> None:
     # A previous build without first_seen tracking cannot tell us what is new.
     tracks_first_seen = any(p.get("first_seen") for p in previous.values())
+    # If one build stamped a large share of rows with the same first_seen, that
+    # build had stale previous data; don't trust those stamps.
+    stamp_counts: dict[str, int] = {}
+    for p in previous.values():
+        if p.get("first_seen"):
+            stamp_counts[p["first_seen"]] = stamp_counts.get(p["first_seen"], 0) + 1
+    suspect_stamps = {stamp for stamp, n in stamp_counts.items() if n > 0.3 * max(len(previous), 1)}
+    if suspect_stamps:
+        log(f"  WARNING: ignoring first_seen stamps from a stale previous build: {sorted(suspect_stamps)}")
     # Per-CVE best severity/CVSS and vendor/product from non-KEV sources.
     cve_metadata: dict[str, dict[str, str]] = {}
     cve_severity: dict[str, tuple[str, float | None]] = {}
@@ -1096,7 +1111,8 @@ def enrich(alerts: list[dict[str, Any]], previous: dict[str, dict[str, Any]], ru
         cve_ids = alert.get("cve_ids") or ([cve] if cve else [])
         alert["cve_ids"] = cve_ids
 
-        if cve and cve in cve_metadata:
+        # Only the sparse sources borrow vendor/product; vendor feeds keep their own.
+        if cve and cve in cve_metadata and alert["source"] in ("kev", "nvd"):
             for key, value in cve_metadata[cve].items():
                 if not alert.get(key):
                     alert[key] = value
@@ -1138,8 +1154,10 @@ def enrich(alerts: list[dict[str, Any]], previous: dict[str, dict[str, Any]], ru
 
         # first_seen: preserve from previous build, else stamp now.
         prev = previous.get(alert["id"])
-        if prev and prev.get("first_seen"):
+        if prev and prev.get("first_seen") and prev["first_seen"] not in suspect_stamps:
             alert["first_seen"] = prev["first_seen"]
+        elif prev and prev.get("first_seen"):
+            alert["first_seen"] = alert.get("published_date") or run_started
         elif prev:
             # Row existed in a build that predates first_seen tracking.
             alert["first_seen"] = prev.get("published_date") or alert.get("published_date") or run_started
@@ -1199,6 +1217,11 @@ def build() -> None:
                             "error_message": str(exc)[:240], "note": f"{len(epss)} scores carried", "count": len(epss), "seconds": 0})
 
     enrich(alerts, previous, run_started, kev_lookup, epss)
+    newly_seen = [a for a in alerts if a.get("first_seen") == run_started]
+    if previous and len(newly_seen) > 0.3 * len(alerts):
+        log(f"  WARNING: {len(newly_seen)} of {len(alerts)} rows look new; previous data was probably stale. Falling back to published dates.")
+        for a in newly_seen:
+            a["first_seen"] = a.get("published_date") or run_started
     apply_watchlist(alerts, watchlist)
 
     alerts = [alert for alert in alerts if alert.get("published_date")]

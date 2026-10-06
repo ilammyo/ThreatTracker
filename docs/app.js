@@ -15,12 +15,14 @@ const sourceShort = {
     okta: "Okta", zoom: "Zoom", aws: "AWS", chrome: "Chrome",
 };
 const RELEASE_SOURCES = new Set(["apple", "chrome", "fortinet", "zoom", "aws", "okta"]);
+const BRIEF_RELEASE_SOURCES = new Set(["apple", "chrome", "fortinet", "zoom"]);
+const GENERIC_KEV_ACTION = /^Apply mitigations (per|in accordance with) vendor instructions/i;
 
 const STALENESS_HOURS = 8;
 const NEW_ALERT_HOURS = 48;
 const SEARCH_INPUT_DELAY_MS = 150;
 const MAX_RENDERED_ALERTS = 500;
-const BRIEF_MAX_ITEMS = 12;
+const BRIEF_MAX_ITEMS = 8;
 const STORAGE_KEYS = { scope: "tt.scope", dismissed: "tt.dismissed", hideDismissed: "tt.hideDismissed" };
 
 let allAlerts = [];
@@ -37,6 +39,7 @@ let activeChip = null; // watchlist entry name
 let dismissed = new Map(); // id -> ISO timestamp
 let showDismissedInBrief = false;
 let tailLoaded = false;   // the NVD long tail (alerts-tail.json) is fetched on demand
+let dataVersion = "";
 let tailLoading = null;
 
 // --- Storage (per-browser conveniences; everything degrades gracefully) ---
@@ -123,8 +126,8 @@ function safeUrl(value) {
     return "";
 }
 
-async function loadJson(path) {
-    const response = await fetch(path);
+async function loadJson(path, options) {
+    const response = await fetch(path, options);
     if (!response.ok) {
         throw new Error(`Failed to load ${path}: ${response.status}`);
     }
@@ -245,7 +248,7 @@ function computeBrief() {
     }
     // 4. Vendor patch releases.
     for (const a of candidates) {
-        if (RELEASE_SOURCES.has(a.source) && a.published_date >= twoWeeks && inScope(a)) take(a, "releases");
+        if (BRIEF_RELEASE_SOURCES.has(a.source) && a.published_date >= twoWeeks && inScope(a)) take(a, "releases");
     }
 
     const bySeverityThenDate = (x, y) => {
@@ -268,6 +271,14 @@ function computeBrief() {
         return y.published_date.localeCompare(x.published_date);
     });
     return lists;
+}
+
+function shortRequiredAction(text) {
+    if (!text) return "";
+    if (GENERIC_KEV_ACTION.test(text)) {
+        return text.includes("discontinue use") ? "Apply vendor mitigations or discontinue use (CISA BOD 26-04)." : "Apply vendor mitigations (CISA BOD 26-04).";
+    }
+    return text.length > 160 ? `${text.slice(0, 157)}...` : text;
 }
 
 function makePill(text, cls) {
@@ -329,7 +340,8 @@ function renderBriefList(listName, alerts) {
         if (listName === "due" && alert.required_action) {
             const action = document.createElement("div");
             action.className = "brief-action";
-            action.textContent = alert.required_action;
+            action.textContent = shortRequiredAction(alert.required_action);
+            action.title = alert.required_action;
             li.appendChild(action);
         }
 
@@ -625,7 +637,8 @@ function buildRow(alert, template) {
     if (alert.source === "kev" && alert.required_action) {
         const action = document.createElement("small");
         action.className = "required-action";
-        action.textContent = `CISA: ${alert.required_action}`;
+        action.textContent = `CISA: ${shortRequiredAction(alert.required_action)}`;
+        action.title = alert.required_action;
         titleCell.appendChild(action);
     }
 
@@ -856,7 +869,7 @@ async function ensureTailLoaded() {
     if (!tailLoading) {
         const meta = document.getElementById("table-meta");
         meta.textContent = `Loading the full NVD feed (${Number(summaryData.tail_alerts || 0).toLocaleString()} more rows)...`;
-        tailLoading = loadJson("./data/alerts-tail.json")
+        tailLoading = loadJson(`./data/alerts-tail.json?v=${dataVersion}`)
             .then((rows) => {
                 allAlerts = allAlerts.concat(rows.map(normalizeAlert));
                 tailLoaded = true;
@@ -876,10 +889,13 @@ async function ensureTailLoaded() {
 async function init() {
     try {
         loadState();
-        const [alerts, status, summary] = await Promise.all([
-            loadJson("./data/alerts.json"),
-            loadJson("./data/status.json"),
-            loadJson("./data/summary.json"),
+        // summary.json is tiny and always fetched fresh; its timestamp then
+        // versions the big files so they cache until the next build.
+        const summary = await loadJson("./data/summary.json", { cache: "no-store" });
+        dataVersion = encodeURIComponent(summary.generated_at || "");
+        const [alerts, status] = await Promise.all([
+            loadJson(`./data/alerts.json?v=${dataVersion}`),
+            loadJson(`./data/status.json?v=${dataVersion}`),
         ]);
         allAlerts = alerts.map(normalizeAlert);
         allStatus = status;

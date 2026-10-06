@@ -65,7 +65,7 @@
                 </div>
                 <div class="brief-col" data-list="releases">
                     <h3>Patch releases <span class="count" id="brief-count-releases"></span></h3>
-                    <p class="brief-hint">Apple, Chrome, Fortinet, Zoom, AWS and Okta releases, last 14 days.</p>
+                    <p class="brief-hint">Apple, Chrome, Fortinet and Zoom releases, last 14 days.</p>
                     <ul id="brief-releases"></ul>
                 </div>
             </div>
@@ -219,11 +219,11 @@
 
     <template id="brief-item-template">
         <li class="brief-item">
-            <div class="brief-item-top">
+            <div class="brief-item-head">
                 <span class="brief-pills"></span>
-                <a class="brief-title" target="_blank" rel="noreferrer"></a>
                 <button class="dismiss" title="Dismiss from brief" aria-label="Dismiss">&times;</button>
             </div>
+            <a class="brief-title" target="_blank" rel="noreferrer"></a>
             <div class="brief-meta"></div>
         </li>
     </template>
