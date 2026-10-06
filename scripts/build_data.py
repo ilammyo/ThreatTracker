@@ -49,7 +49,7 @@ NVD_REQUEST_DELAY = 1.0 if NVD_API_KEY else 6.5   # 50 req/30s with key, 5 req/3
 APPLE_DETAIL_LIMIT = 80
 # Time budgets (seconds). A source that exceeds its budget stops where it is
 # and reports status "partial" instead of risking the job timeout.
-NVD_TIME_BUDGET = int(os.environ.get("NVD_TIME_BUDGET", "600"))
+NVD_TIME_BUDGET = int(os.environ.get("NVD_TIME_BUDGET", "900"))
 APPLE_TIME_BUDGET = int(os.environ.get("APPLE_TIME_BUDGET", "120"))
 PREVIOUS_DATA_URL = os.environ.get(
     "PREVIOUS_DATA_URL", "https://ilammyo.github.io/ThreatTracker/data/alerts.json"
